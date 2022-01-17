@@ -1,13 +1,13 @@
-package name.junnikym.learn_spring_cloud;
+package name.junnikym;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.openfeign.EnableFeignClients;
 
 @SpringBootApplication
-public class LearnSpringCloudApplication {
-
+@EnableFeignClients
+public class UserApplication {
 	public static void main(String[] args) {
-		SpringApplication.run(LearnSpringCloudApplication.class, args);
+		SpringApplication.run(UserApplication.class);
 	}
-
 }
