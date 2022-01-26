@@ -18,8 +18,9 @@ public class ProductRemoteService {
 		return this.restTemplate.getForObject(url+productId, String.class);
 	}
 
-	public String getProductInfoFallback(Long productId) {
-		return productId.toString()+" is product is sold out";
+	public String getProductInfoFallback(Long productId, Throwable throwable) {
+		System.out.println("throwable : " + throwable);
+		return "The product is sold out";
 	}
 
 }

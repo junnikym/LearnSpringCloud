@@ -13,6 +13,12 @@ public class ProductController {
 	@GetMapping("/{id}")
 	public String getProductInfo(@PathVariable("id") Long id) {
 		throw new RuntimeException("I/O Exception");
+//		try {
+//			Thread.sleep(2000);
+//		} catch (Exception e) {
+//			e.printStackTrace();
+//		}
+//		System.out.println("Call Product ID : " + id);
 //		return "product id is " + String.valueOf(id);
 	}
 

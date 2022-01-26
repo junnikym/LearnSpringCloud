@@ -18,9 +18,9 @@ public class UserController {
 //	private final ProductClient productClient;
 	private final ProductRemoteService productRemoteService;
 
-	@GetMapping("/own/product/{id}")
-	public String getProductInfo(@PathVariable("id") Long id) {
-		return productRemoteService.getProductInfo(id);
+	@GetMapping("/own/product/{productId}")
+	public String getProductInfo(@PathVariable("productId") Long productId) {
+		return productRemoteService.getProductInfo(productId);
 	}
 
 }

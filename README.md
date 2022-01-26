@@ -80,8 +80,14 @@ Hystrix의 순서도는 아래와 같다
 < Gradle >
 ``` gradle
 dependencies {
-    compile('org.springframework.cloud:spring-cloud-starter-netflix-hystrix')
- }
+    implementation 'org.springframework.cloud:spring-cloud-starter-netflix-hystrix'
+    
+    ...
+    
+//  위와 같이 추가 시 Dependency 가 추가되지 않아 버전을 명시했더니 추가가 됨     
+//  implementation 'org.springframework.cloud:spring-cloud-starter-netflix-hystrix:2.1.0.RELEASE'
+
+}
 ```
 
 ### 한번 적용해보기
@@ -97,7 +103,8 @@ dependencies {
 다음과 같이 User 서비스에서 Product 서비스를 호출 시 문제가 발생하면 Circuit Breaker 가 Fallback 을 반환하도록 만들어보자<br/>
 
 <br/>
-<b>< User Service ></b> 
+<b>< User Service ></b>
+<p align="right"> ( User ) Controller </p> 
 
 ``` java
 @SpringBootApplication
@@ -117,7 +124,8 @@ public class UserApplication {
 Root Package에 '@EnableCircuitBreaker' Annotation을 추가하여 Circuit Breaker 사용여부를 선언 <br/>
 서비스에서 RestTemplate을 사용할 것이니 RestTemplate 빈을 생성한다.
 
-- ( User ) Controller
+<p align="right"> ( User ) Controller </p>
+
 ``` java
 @RestController
 @RequiredArgsConstructor
@@ -133,7 +141,8 @@ public class UserController {
 }
 ```
 
-- ( User ) Product Remote Service
+<p align="right"> ( User ) Product Remote Service </p>
+
 ``` java
 @RequiredArgsConstructor
 @Service
@@ -149,7 +158,7 @@ public class ProductRemoteService {
 	}
 
 	public String getProductInfoFallback(Long productId) {
-		return productId.toString()+" is product is sold out";
+		return "The product is sold out";
 	}
 }
 ```
@@ -158,6 +167,7 @@ public class ProductRemoteService {
 
 <br/>
 <b>< Product Service ></b>
+<p align="right"> ( Product ) Controller </p> 
 
 ``` java
 @RestController
@@ -171,6 +181,135 @@ public class ProductController {
 }
 ```
 일부로 Runtime Exception 을 발생시켜 실습을 진행하였다.
+
+### Result
+
+<table>
+  <tr>
+    <th width="50%" align="center"> <code>Product API</code> 를 호출했을 경우 </th>
+    <th width="50%" align="center"> Product API 를 호출하는 <code>User API</code> 를 호출했을 경우 </th>
+  </tr>
+  <tr>
+    <td align="center"> <img src="./screen/hystrix/result_product.png" width="100%" alter="result" /> </td>
+    <td align="center"> <img src="./screen/hystrix/result_user.png" width="100%" alter="result" /> </td>
+  </tr>
+</table>
+<br/>
+
+### Fallback 원인을 알아보자
+
+<p align="right">  ( User ) Product Remote Service </p>
+
+``` java
+...
+
+    public String getProductInfoFallback(Long productId, Throwable t) {
+        System.out.println("[Log] Product Remote Service In User | getProductInfo Fallback Run : " + t);
+		return "The product is sold out";
+	}
+	
+...
+```
+다음과 같이 Fallback 함수에 Throwable 타입의 인자를 사용하면 요청의 에러를 조회 할 수 있다.
+
+### Hystrix의 Timeout 설정하기
+
+@HystrixCommand 어노테이션이 붙은 메소드는 Timeout 시간 내 처리가 되지 않으면 Exception 이 발생한다. 기본 설정 시간은 1000ms (1s)
+
+<p align="right">  ( User ) Product Remote Service </p>
+
+``` java
+    @GetMapping("/{id}")
+	public String getProductInfo(@PathVariable("id") Long id) {
+		try {
+			Thread.sleep(2000);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		
+		System.out.println("Call Product ID : " + id);
+		return "product id is " + String.valueOf(id);
+	}
+```
+Product 서비스의 Controller 를 다음과 같이 수정 후 User 서비스를 호출하면 Fallback 이 호출되는것을 확인할 수 있다. <br/>
+( Hystrix 의 기본 Timeout 값은 1000ms / Product 서비스는 2000ms 후 값을 리턴한다. ) <br/>
+
+<table>
+  <tr>
+    <th width="50%" align="center"> User API 를 호출했을 시 Client 가 받는 값 </th>
+    <th width="50%" align="center"> Product API 의 로그 </th>
+  </tr>
+  <tr>
+    <td align="center"> <img src="./screen/hystrix/result_timeout.png" width="100%" alter="result" /> </td>
+    <td align="center"> <img src="./screen/hystrix/result_timeout_product_log.png" width="100%" alter="result" /> </td>
+  </tr>
+</table>
+하지만 위 결과를 보면 1초 후 Fallback이 반환되었음에도 2초 후 Product 서비스에서 System.out.println 가 작동되었다. <br/>
+Log 출력이 가능했던 이유는 Product (불리는 입장) 의 Timeout이 아닌 User (부르는 입장) 의 Timeout 이기때문에 Product (불리는 입장) 에서는 전혀 영향이 없기때문에 정상작동하였다. <br/> 
+User (부르는 입장) 에서는 Hystrix 가 Interupt 를 걸었기 때문에 Fallback이 작동. <br/>
+<br/>
+
+<b>application.yml 또는 application.properties 에서 Timeout 시간 변경</b>
+``` yaml
+hystrix:
+  command:
+  
+    # 전역설정
+    default:
+      execution.isolation.thread.timeoutInMilliseconds: 3000
+      
+    # 특정 commandKey에 대한 설정
+    getInfo:
+      execution.isolation.thread.timeoutInMilliseconds: 10000
+```
+다음 속성에 값을 설정하면 Timeout시간이 변경된다. 위 실습의 Product 서비스가 구동되기 위해서 3000 값을 넣으면 User 서비스가 정상적으로 값을 받아오는것을 확인 할 수 있다.
+
+``` java
+@HystrixCommand(commandKey = "getInfo", fallbackMethod = "getProductInfoFallback")
+```
+다음과 같이 @HystrixCommand 적용 시 commandKey 속성을 정의한다면 따로 설정을 달리할 수 있다.<br/>
+
+### Circuit Open 테스트
+
+``` yaml
+hystrix:
+  command:
+    default:
+      circuitBreaker:
+      
+        # n회 이상 시 Circuit Open ( default : 20 ) 
+        requestVolumeThreshold: 1
+        
+        # 정해진 시간 내 n% 의 요청이 Error일 시 Circuit Open ( default : 50 )
+        errorThresholdPercentage: 50
+        
+        # 한번 Open 된 Circuit 을 n 동안 유지 ( default: 5000 )
+        SleepWindowInMilliseconds: 5000
+        
+        # 발생하는 Error를 n 동안 카운팅 ( default : 10000 )
+      metrics:
+        rollingStats.timeInMilliseconds: 10000
+        
+        # default 값을 유지 시 
+        #   10s 동안 20회 이상 호출될 경우 50% 이상 실패하면 Circuit Open
+        
+        # 바뀐 설정값 적용 시
+        #   10s 동안 1회 이상 호출될 경우 50% 이상 실패하면 Circuit Open   
+```
+다음 중 <code>requestVolumeThreshold</code>, <code>errorThresholdPercentage</code> 만 위와 같이 바꾸어 Fallback 이 실행 될 수 있는 환경으로 실습해보았다. <br/>
+
+<table>
+  <tr>
+    <th width="50%" align="center"> Circuit Open 조건 변경 시 </th>
+  </tr>
+  <tr>
+    <td align="center"> <img src="./screen/hystrix/result_circuit_open.png" width="100%" alter="result" /> </td>
+  </tr>
+</table>
+
+다음과 같이 Product 호출에 실패가 발견될 경우 <code>Hystrix circuit short-circuited and is OPEN</code> 라는 Runtime Exception 이 발생; Circuit 이 Open 됨을 확인할 수 있다. <br/>
+이는 <code>SleepWindowInMilliseconds</code> 의 기본값임 5000ms 동안 유지된 후 Circuit Close 상태로 돌아오게된다. <br/>
+<br/>
 
 ---
 <p align="right"> <sup>2022-01-17</sup><br/> </p>
