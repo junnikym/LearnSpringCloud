@@ -12,7 +12,8 @@ public class ProductController {
 
 	@GetMapping("/{id}")
 	public String getProductInfo(@PathVariable("id") Long id) {
-		return "product id is " + String.valueOf(id);
+		throw new RuntimeException("I/O Exception");
+//		return "product id is " + String.valueOf(id);
 	}
 
 }
