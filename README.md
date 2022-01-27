@@ -1,15 +1,16 @@
 # TIL; Spring Cloud
 
 ## Index
-1. [Hystrix](#1.-Circuit-breaker---Hystrix) - <sup>2022-01-26</sup>
-2. [Feign](#2.-Declarative-Http-Client---Feign) - <sup>2022-01-17</sup>
+1. [Hystrix](#Circuit-breaker---Hystrix) - <sup>2022-01-26</sup>
+2. [Ribbon](#Client-Load-Balancer---Ribbon) - <sup>2022-01-27</sup>
+3. [Feign](#Declarative-Http-Client---Feign) - <sup>2022-01-17</sup>
 
 <br/>
 
 ---
 <p align="right"> <sup>2022-01-26</sup><br/> </p>
 
-## 1. Circuit breaker - Hystrix
+## Circuit breaker - Hystrix
 Circuit breaker; 전류를 차단하는 장치이다. ```Hystrix```는 Micro Service의 Circuit Breaker 역할. <br/>
 문제가 있는 Micro Service 로의 트래픽을 차단; 전체 서비스의 문제를 미리 방지
 
@@ -79,14 +80,24 @@ Hystrix의 순서도는 아래와 같다
 
 < Gradle >
 ``` gradle
+
+// https://spring.io/projects/spring-cloud
+// 위 링크에서 Spring Boot Version 과 맞는 버전 확인 후 작성
+
+ext {
+    set('springCloudVersion', "2021.0.0")
+}
+
+dependencyManagement {
+  imports {
+    mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+  }
+}
+
+// ----- 이까진 다른 항목 공통사항
+
 dependencies {
     implementation 'org.springframework.cloud:spring-cloud-starter-netflix-hystrix'
-    
-    ...
-    
-//  위와 같이 추가 시 Dependency 가 추가되지 않아 버전을 명시했더니 추가가 됨     
-//  implementation 'org.springframework.cloud:spring-cloud-starter-netflix-hystrix:2.1.0.RELEASE'
-
 }
 ```
 
@@ -311,10 +322,172 @@ hystrix:
 이는 <code>SleepWindowInMilliseconds</code> 의 기본값임 5000ms 동안 유지된 후 Circuit Close 상태로 돌아오게된다. <br/>
 <br/>
 
+
+
+
+
+---
+<p align="right"> <sup>2022-01-27</sup><br/> </p>
+
+## Client Load Balancer - Ribbon
+
+Ribbon 은 Client-Side Load Balancer 이며 Server-Side Load Balancer 를 사용했을때 단점들을 보안;
+
+### Server-Side Load Balancer
+기존 Server-Side Load Balancer 는 L4 Switch 를 사용하여 Load Balancing 을 진행; <br/> 
+Client 는 L4 주소만 알고있으며 / L4 스위치가 서버 목록을 알고있음 
+
+<p align="right"> Server-Side Load Balancer </p> 
+
+```
+                                  ┏━━━━━(Server 1)  
+                                  ┃                 
+┏━━━━━━━━┓          ┏━━━━━━━━┓    ┣━━━━━(Server 2)  
+┃ Client ┣━━━━━━━━━▶┃   LB   ┣━━━━┫                 
+┗━━━━━━━━┛          ┗━━━━━━━━┛    ┣━━━━━(Server 3)  
+                                  ┃                 
+                                  ┗━━━━━(Server 4)  
+```
+
+<b>< Server-Side Load Balancer 의 단점 ></b>
+1. 비싼 비용 / 떨어지는 유연성
+2. 서버 추가를 위해 설정이 필요함 -> 자동화가 어려움
+3. Load Balancing Schema 가 한정적 (Round Robbin, Sticky, ...) <br/>
+...
+
+### Client-Side Load Balancer
+Server가 아닌 Client가 Load Balancing 을 진행 <br/>
+Client (API Caller) 에 탑재되는 S/W 모듈; 주어진 서버 목록에서 Load Balancing 이 이루어짐 <br/>
+위 Server-Side 에서 발생하는 3가지 단점이 모두 보안된다.
+
+```
+                                     ┏━━━━━(Server 1)  
+┏━━━━━━━━━━━━━━━┓                    ┃                 
+┃  Client  ┏━━━━┻━━━┓                ┣━━━━━(Server 2)  
+┃ (Caller) ┃ Ribbon ┣━━━━━━━━━━━━━━━▶┃                 
+┃          ┗━━━━┳━━━┛                ┣━━━━━(Server 3)  
+┗━━━━━━━━━━━━━━━┛                    ┃                 
+                                     ┗━━━━━(Server 4)  
+```
+
+### Ribbon 구성요소
+
+1. Server List :
+  Load Balancing 대상 서버 목록
+  Configuration -> Static 하게 설정 / Eureka -> Dynamic 하게 설정
+2. Rule :
+  Load Balancing Schema;
+  Round Robbin, Available Filtering, weighted Response Time ..
+3. Ping :
+  서버 목록이 모두 살아있는지 체크;
+4. Retry :
+  Server 로부터 응답을 받지 못했을 경우 동일한 서버 또는 다른 서버로 재시도;
+
+### Dependency
+``` gradle
+dependencies {
+    implementation 'org.springframework.cloud:spring-cloud-starter-netflix-ribbon'
+}
+```
+
+<sup>** ref : https://sabarada.tistory.com/54 </sup>
+
+### 한번 적용해보기
+
+<p align="right"> ( User ) Application </p>
+
+``` java
+@SpringBootApplication
+public class UserApplication {
+
+    @Bean
+    @LoadBalanced   // 추가
+    public RestTemplate restTemplate() {
+        return new RestTemplate();
+    }
+    
+    ...
+}
+```
+RestTemplate Bean에 <code>@LoadBalanced</code> 어노테이션을 추가
+
+<p align="right"> ( User ) Product Remote Service </p>
+
+``` java
+// 수정 전
+private static final String url = "http://localhost:8082/api/v1/product/";
+
+// 수정 후 
+private static final String url = "http://product/api/v1/product/";
+```
+위 구문을 아래와 같이 변경 ( service 주소 -> service 이름 )
+RestTemplate 에 들어갈 URL 을 다음과 같이 변경해준다. 이후 <code>application.yml</code> 또는 <code>application.properties</code> 에 Ribbon 설정을 넣어준다. 
+
+<p align="right"> ( User ) application.yml 속성 </p>
+
+``` yaml
+product:
+  ribbon:
+    listOfServers: localhost:8082
+```
+
+서비스의 리본 속성을 설정해준다.
+
+<table>
+  <tr>
+    <th width="50%" align="center"> Ribbon 적용 후 요청 결과 </th>
+  </tr>
+  <tr>
+    <td align="center"> <img src="./screen/ribbon/result_1.png" width="100%" alter="result" /> </td>
+  </tr>
+</table><br/>
+
+## How !?
+```
+ RestTemplate Beans 에 <code>@LoadBalanced</code> 를 적용 <br/>
+   ↘ RestTemplate 에 Interceptor 를 추가  
+      ↘ Interceptor 내부에서 RestTemplate 으로 들어온 URL을 Configuration 에 등록된 값으로 변경 
+```
+<br/>
+
+### Retry 기능을 추가해보기
+
+Retry 란 말 그대로 서버에 요청 시 실패했을 경우, 다시 서버에 요청을 보내는 것을 Retry 라고 한다.
+
+``` yaml
+product:
+  ribbon:
+    listOfServers: localhost:8082, localhost:7777
+    
+    // 동일 서비스 연결시도 횟수
+    MaxAutoRetries: 0
+    
+    // 다음 서비스 연결 시도 횟수
+    MaxAutoRetriesNextServer: 1
+    
+    // retry 가 가능한 StatusCode 도 설정할 수 있다.
+    retryableStatusCodes: 503, 408
+    
+```
+
+Retry 는 목록에 등록된 서버를 Round Robbin 방식으로 진행; <br/>
+위 설정으로 수정 후 Retry 를 적용할 경우, <code>7777 port</code> 의 서버는 만든적이 없으므로 접속하게되면 Exception이 발생하고 <code>MaxAutoRetriesNextServer</code> 설정이 <code>1</code> 이므로 다음 서버로 요청을 다시 보내게 된다.
+
+<b>Dependency</b>
+``` gradle
+dependencies {
+    implementation 'org.springframework.retry:spring-retry'
+}
+```
+
+
+
+
+
 ---
 <p align="right"> <sup>2022-01-17</sup><br/> </p>
 
-## 2. Declarative Http Client - Feign
+## Declarative Http Client - Feign
 Netflix에서 개발된 HTTP Client Binder; REST Template 호출 등을 JPA Repository와 같이 Interface로 추상화. <br/>
 MSA를 서로 호출 시 코드의 복잡성이 높아진다. Feign를 통해 복잡성을 낮출수 있음.
 
@@ -323,22 +496,8 @@ MSA를 서로 호출 시 코드의 복잡성이 높아진다. Feign를 통해 �
 ### Dependency
  < Gradle >
 ``` gradle
-// https://spring.io/projects/spring-cloud
-
-ext {
-    set('springCloudVersion', "Hoxton.SR8")
-}
-
-dependencyManagement {
-  imports {
-    mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
-  }
-}
-
 dependencies {
     implementation "org.springframework.cloud:spring-cloud-starter-openfeign"
-    /* 또는 */
-    compile("org.springframework.cloud:spring-cloud-starter-openfeign")
 }
 ```
  < Maven >

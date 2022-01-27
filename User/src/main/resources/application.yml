@@ -12,5 +12,12 @@ hystrix:
         isolation.thread.timeoutInMilliseconds: 3000
 
       circuitBreaker:
-        requestVolumeThreshold: 1
+        requestVolumeThreshold: 20
         errorThresholdPercentage: 50
+
+product:
+  ribbon:
+    listOfServers: localhost:8082, localhost:7777
+    MaxAutoRetries: 0
+    MaxAutoRetriesNextServer: 1
+    OkToRetryOnAllOperations: true

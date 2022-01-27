@@ -9,7 +9,8 @@ import org.springframework.web.client.RestTemplate;
 @Service
 public class ProductRemoteService {
 
-	private static final String url = "http://localhost:8082/api/v1/product/";
+//	private static final String url = "http://localhost:8082/api/v1/product/";
+	private static final String url = "http://product/api/v1/product/";
 
 	private final RestTemplate restTemplate;
 
