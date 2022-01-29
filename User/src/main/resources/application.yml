@@ -7,17 +7,27 @@ spring:
 
 hystrix:
   command:
-    default:
-      execution:
-        isolation.thread.timeoutInMilliseconds: 3000
+    productInfo:
+      default:
+        execution:
+          isolation.thread.timeoutInMilliseconds: 3000
 
-      circuitBreaker:
-        requestVolumeThreshold: 20
-        errorThresholdPercentage: 50
+        circuitBreaker:
+          requestVolumeThreshold: 20
+          errorThresholdPercentage: 50
 
 product:
   ribbon:
-    listOfServers: localhost:8082, localhost:7777
+    eureka:
+      enabled: true
+    #    listOfServers: localhost:8082
     MaxAutoRetries: 0
     MaxAutoRetriesNextServer: 1
-    OkToRetryOnAllOperations: true
+    NIWSServerListClassName: com.netflix.niws.loadbalancer.DiscoveryEnabledNIWSServerList
+
+eureka:
+  instance:
+    prefer-ip-address: false
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka

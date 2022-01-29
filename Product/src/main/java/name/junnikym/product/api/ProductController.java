@@ -18,7 +18,7 @@ public class ProductController {
 //		} catch (Exception e) {
 //			e.printStackTrace();
 //		}
-//		System.out.println("Call Product ID : " + id);
+		System.out.println("Call Product ID : " + id);
 		return "product id is " + String.valueOf(id);
 	}
 

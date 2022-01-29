@@ -1,9 +1,13 @@
 # TIL; Spring Cloud
 
+* SK planet T아카데미 토크ON세미나 에서 진행한 <code>Spring Cloud를 활용한 MSA 기초</code> 를 바탕으로 학습. <br/>
+** 강의에 사용된 Github : <https://github.com/Gunju-Ko/spring-cloud-workshop>
+
 ## Index
 1. [Hystrix](#Circuit-breaker---Hystrix) - <sup>2022-01-26</sup>
 2. [Ribbon](#Client-Load-Balancer---Ribbon) - <sup>2022-01-27</sup>
-3. [Feign](#Declarative-Http-Client---Feign) - <sup>2022-01-17</sup>
+3. [Eureka](#Service-Registry---Eureka) - <sup>2022-01-29</sup>
+4. [Feign](#Declarative-Http-Client---Feign) - <sup>2022-01-17</sup>
 
 <br/>
 
@@ -442,7 +446,7 @@ product:
   </tr>
 </table><br/>
 
-## How !?
+## How It Works
 ```
  RestTemplate Beans 에 <code>@LoadBalanced</code> 를 적용 <br/>
    ↘ RestTemplate 에 Interceptor 를 추가  
@@ -479,7 +483,119 @@ dependencies {
     implementation 'org.springframework.retry:spring-retry'
 }
 ```
+<br/>
 
+<b> Error </b>
+
+> Rerty Dependency 추가 시 RetryLoadBalancerInterceptor 가 추가되지 않음 <br/>
+> -> Hoxton 이후 Netflix Ribbon 이 Spring Cloud 에서 재공되지않음 <br/>
+> -> -> 대체된 다른 패키지와 충돌 ? 차후 알아보고 추가 및 수정 
+
+<br/>
+<br/>
+
+
+
+
+
+
+-----
+<p align="right"> <sup>2022-01-29</sup><br/> </p>
+
+## Service Registry - Eureka
+위에서 실습한 Ribbon 을 사용시 Cloud Native 한 방법과는 거리가 멀다. (서버 목록을 Configuration 에 직접 설정해주었기 때문에 Cloud Native 하게 만드려면 자동화가 되어야함.) <br/>
+
+서버가 새롭게 시작될 경우 그것을 감지 후 목록에 자동으로 추가 / 서버 종료시 자동 삭제하는 기능의 필요성을 느껴 Netflix 에서 Eureka 를 개발;
+
+** 이와 비슷한 Service Registry 기능을 제공하는 Consul 이 존재한다.
+
+### Discovery Client
+Spring cloud 에서 Service Registry 사용 부분을 추상화하여 Interface 로 빼내어 제공; -> Discovery Client <br/>
+만약 Netflix Eureka 를 사용하다가 Consul 을 사용하고 싶을 경우 코드에는 변함이 없다. (cause) Discovery Client 가 추상화 해주었기 때문; <br/>
+
+** Eureka, Consul, Zookeeper .. 등의 구현체가 존재
+
+### [Ribbon](#Client-Load-Balancer---Ribbon) 와의 결합
+
+<code>Eureka</code> 를 통해서 서버 목록을 가져온 뒤 서버 목록을 로컬에 저장; <br/>
+이후 호출 할 경우 <code>Ribbon</code> 을 통해 Load Balancing 을 진행; <br/>
+
+### Dependency
+
+<b>On Registry</b>
+
+``` gradle
+dependencies {
+    implementation "org.springframework.cloud:spring-cloud-starter-netflix-eureka-server"
+}
+```
+
+<br/>
+<b>On Client</b>
+
+``` gradle
+dependencies {
+    implementation "org.springframework.cloud:spring-cloud-starter-netflix-eureka-client"
+}
+```
+
+### 한번 적용해보기
+
+<b>On Registry</b>
+
+Application Class 에 <code>@EnableEurekaServer</code> 어노테이션만 붙여주면 된다.
+
+``` java
+@EnableEurekaServer
+@SpringBootApplication
+public Class EurekaServerApplication { ... }
+```
+
+<b>On Client</b>
+
+Application Class 에 <code>@EnableEurekaServer</code> 어노테이션을 붙여준 뒤 Configuration 설정.
+
+``` java
+@EnableEurekaServer
+@SpringBootApplication
+public Class EurekaServerApplication { ... }
+```
+
+<p align="right"> ( Client ) Configuration </p>
+
+``` yml
+eureka.client.serviceUrl.defaultZone: http://<eureka server url>/eureka/
+```
+** Eureka Server Url 의 경우 8761 이 기본 포트로 설정되어있으며, 실습에서는 localhost:8761 으로 설정;
+
+### How It Works
+
+1. (Client) 서버 시작 시 Eureka Server (Registry) 에 자신의 상태를 등록(Up) <br/>
+** eureka.client.register-with-eureka: true (default)
+
+2. 주기적 HeartBeat 으로 Eureka Server 에 자신이 살아있음을 알림
+** eureka.instance.lease-renewal-interval-in-seconds: 30 (default)
+
+3. 서버 종료시 Eureka Server 에 자신의 상태 변경 (Down) 혹은 목록에서 삭제
+
+** Eureka 상에 등록된 이름은 <code>spring.application.name</code><br/>
+<br/>
+
+### Result
+Eureka 는 Dashboard 를 지원한다; Eureka Server (Registry) 의 서버로 접속하면 Eureka Dashboard 를 확인 할 수 있다.
+
+<p align="center"> <img src="./screen/eureka/result_registry.jpg" width="100%" alter="result" /> </p>
+
+
+### Trouble
+Ribbon 가 Registry 에서 서버 목록을 불러오지않고 계속 Configuration 의 서버 목록을 불러온다; <br/>
+```
+ribbon.NIWSServerListClassName: com.netflix.niws.loadbalancer.DiscoveryEnabledNIWSServerList
+```
+<code>NIWSServerListClassName</code> 는 서버 목록 구현 클래스 설정이다. 해당 설정을 통해 Eureka 와 연동을 활성화; <br/>
+
+** ref: <https://happycloud-lee.tistory.com/214> <br/>
+<br/>
 
 
 

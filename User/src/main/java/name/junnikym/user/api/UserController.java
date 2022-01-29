@@ -1,8 +1,6 @@
 package name.junnikym.user.api;
 
-import com.netflix.hystrix.contrib.javanica.annotation.HystrixCommand;
 import lombok.RequiredArgsConstructor;
-import name.junnikym.user.client.ProductClient;
 import name.junnikym.user.serivce.ProductRemoteService;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;

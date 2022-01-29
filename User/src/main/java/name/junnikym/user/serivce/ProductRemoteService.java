@@ -14,7 +14,7 @@ public class ProductRemoteService {
 
 	private final RestTemplate restTemplate;
 
-	@HystrixCommand(fallbackMethod = "getProductInfoFallback")
+	@HystrixCommand(commandKey = "productInfo", fallbackMethod = "getProductInfoFallback")
 	public String getProductInfo(Long productId) {
 		return this.restTemplate.getForObject(url+productId, String.class);
 	}
