@@ -1,0 +1,32 @@
+server:
+  port: 8765
+
+spring:
+  application:
+    name: gateway
+
+ribbon:
+  eureka:
+    enabled: false
+
+zuul:
+  ignoredServices: '*'
+  routes:
+    product:
+      path: /api/v1/product/**
+#     url: http://localhost:8082
+      serviceId: product
+      stripPrefix: false
+    user:
+      path: /api/v1/user/**
+#     url: http://localhost:8081
+      serivceId: user
+      stripPrefix: false
+
+eureka:
+  instance:
+    prefer-ip-address: true
+    non-secure-port: ${server.port}
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka

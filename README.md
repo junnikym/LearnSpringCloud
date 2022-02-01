@@ -8,6 +8,7 @@
 2. [Ribbon](#Client-Load-Balancer---Ribbon) - <sup>2022-01-27</sup>
 3. [Eureka](#Service-Registry---Eureka) - <sup>2022-01-29</sup>
 4. [Feign](#Declarative-Http-Client---Feign) - <sup>2022-01-17</sup>
+5. [Zuul](#API-Gateway---Zuul) - <sup>2022-02-01</sup>
 
 <br/>
 
@@ -642,9 +643,7 @@ dependencies {
 @SpringBootApplication
 @EnableFeignClients     // 추가
 public class UserApplication {
-	public static void main(...) {
-		SpringApplication.run(...);
-	}
+	public static void main(...) { ... }
 }
 ```
 Root Package에 '@EnableFeignClients' Annotation을 추가하여 Feign Client 사용여부를 선언
@@ -703,6 +702,145 @@ public class UserController {
   </tr>
 </table>
 <br/>
+
+
+
+
+
+
+
+---
+<p align="right"> <sup>2022-02-01</sup><br/> </p>
+Front Door; Client 와 Backend 사이의 출입문 역할. <br/>
+Rounting 기능 (<code>routing</code>, <code>filtering</code>, <code>API Convering</code>, <code>Client Adapter API</code>, <code>Service Proxy</code> ) <br/>
+횡단 관심사 <sup>Cross-Service Concerns</sup> ; 모든 어플리케이션이 가지고있는 관심사를 처리 (<code>보안, 인증, 인가</code> / <code>rate limiting</code> / <code>metering</code> )
+
+** <code>Zuul</code> 은 하나만 있을 때, 장애가 생기면 손실이 크기 때문에 이중화를 하는것이 일반적; ( ELB, L4 Switch .. )
+
+### <code>Hystrix</code>, <code>Ribbon</code>, <code>Eureka</code> 이 내장
+```
+┏━ User ━━━━━━━━━━━━━━━━━━┓                            ┏━ Server A ━━━━━┓
+┃ ┏━ Ribbon ━━━━━━━━━━━━┓ ┃    Can Retry by Ribbon     ┃ ┏━ Server 1 ━┓ ┃
+┃ ┃ ┏━ HTTP Client ━━━┳━━━╋━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━▶┗━━━━━━━━━━━━┛ ┃
+┃ ┃ ┗━━━━━━━━━━━━━━━━━┛ ┃ ┃               ┃            ┃ ┏━ Server 1 ━┓ ┃
+┃ ┃ ┏━ Eureka Client ━┓ ┃ ┃               ┣━━━━━━━━━━━━━▶┗━━━━━━━━━━━━┛ ┃
+┃ ┃ ┗━━━━━━━━━━━━━━━━━┛ ┃ ┃               ┃            ┃ ┏━ Server 1 ━┓ ┃
+┃ ┗━━━━━━━━━━━━━━━━━━━━━┛ ┃               ┗━━━━━━━━━━━━━▶┗━━━━━━━━━━━━┛ ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━┛                            ┗━━━━━━━━━━━━━━━━┛
+```
+
+1. Zuul 의 모든 API 는 <code>HystrixCommand</code> 로 구성이 되어 전달; 하나의 서버군이 장애 시 다른 서버군 서비스에 문제가 없음.
+2. API 를 전달할 서버의 목록을 Ribbon 을 통해 L/B 을 수행 
+3. Eureka Client 를 통해 Server List 를 찾는다. 
+
+### Dependency
+``` gradle
+dependencies {
+    implementation "org.springframework.cloud:spring-cloud-starter-netflix-zuul"
+    implementation "org.springframework.cloud:spring-cloud-starter-netflix-eureka-client"
+}
+```
+
+### 한번 적용해보기
+<p align="right"> ( User ) Application </p>
+
+``` java
+@SpringBootApplication
+@EnableZuulProxy          // 추가
+@EnableDiscoveryClient    // 추가
+public class UserApplication {
+	public static void main(...) { ... }
+}
+```
+
+[Eureka](#Service-Registry---Eureka) 에서는 <code>@EnableEurekaClient</code> 를 사용하였지만 이번 실습에서는 <code>@EnableDiscoveryClient</code> 를 사용하였다. <br/>
+두 어노테이션의 기능적 차이는 크게 없지만 둘의 차이는 <code>@EnableEurekaClient</code> 를 사용하게되면 Eureka 라는 종속성이 생기자만 <code>@EnableDiscoveryClient</code> 를 사용하게 된다면 좀 더 추상적으로 사용할 수 있다. <br/>
+
+<code>@EnableZuulProxy</code> 외에도 <code>@EnableZuulServer</code> 도 존재한다. 다만 이는 <code>PreDecorationFilter</code>, <code>RibbonRoutingFilter</code>, <code>SimpleHostRoutingFilter</code> 가 적용되지 않는다.
+
+``` yaml
+zuul:
+  ignoredServices: '*'    # routes에 정의되지 않은 모든 요청은 무시 함
+  routes:
+    product:
+      path: /api/v1/product/**
+#     url: http://localhost:8082
+      serviceId: product
+      stripPrefix: false            
+    user:
+      path: /api/v1/user/**
+#     url: http://localhost:8081
+      serivceId: user
+      stripPrefix: false
+
+eureka:
+  instance:
+    prefer-ip-address: true
+    non-secure-port: ${server.port}
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka
+```
+
+<code>routes</code> 안에 Service 이름과 그에 해당하는 정보들을 입력해 준다. <br/>
+Product Service 의 경우 [주소]/product/api/v1/product/~ 와 같은 url 에 접속 시 Product Service 이용이 가능하다. <code> [주소] / [Product ID] / [Path] / ** </code> 와 같은 형식<br/>
+만약 <code>stripPrefix</code> 설정을 <code>true</code> 로 설정한다면 (주소)/product/~ 로 path 를 생략할 수 있다.
+
+** Eureka를 사용하지 않는 경우, 주석 처리된 URL 을 설정 시 서버 목록을 지정해 줄 수 있다.
+
+### Isolation
+Spring Cloud Zuul 의 기본 Isolation Strategy 는 <code>Semaphore</code> 방식이다. (Netflix Zuul 의 경우 ThreadPool) <code>Semaphore</code> 는 Network Timeout 을 격리시켜주지 못한다.
+
+``` yaml
+zuul.ribbon-isolation-strategy : thread
+```
+다음 설정을 통해 Isolation Strategy 를 Thread 로 변경이 가능하다. 단, Hystrix Command 가 하나의 Thread Pool에 묶이게 된다. <br/>
+
+``` yaml
+zuul.thread-pool.useSeperateThreadPools : true
+zuul.thread-pool.threadPoolKeyPrefix : zuulgw
+```
+따라서 다음 설정을 통해 유레카에 등록된 서비스 별로 Thread 생성이 가능하다. <br/>
+예시는 다음과 같음.
+``` yaml
+zuul:
+  routes:
+    ...
+      
+  ribbonIsolationStrategy : thread
+  threadPool:
+    useSeperateThreadPools: true
+    threadPoolKeyPrefix: zuul-
+    
+hystrix:
+  command:
+    default:
+      execution.isolation.thread.timeoutInMilliseconds: 1000
+  
+    product:
+      execution.isolation.thread.timeoutInMilliseconds: 10000
+          
+  threadpool:
+    zuul-product:
+      coreSize: 30
+      maximumSize: 100
+      allowMaximumSizeToDivergeFromCoreSize: true
+      
+    zuul-display:
+      coreSize: 30
+      maximumSize: 100
+      allowMaximumSizeToDivergeFromCoreSize: true
+```
+
+### Error
+Spring Boot 2.4.x 버전 이후 부터 Spring Cloud 로 부터 삭제되었으며 Zuul 에서 사용하는 ErrorController::getErrorPath 메소드가 Spring Boot 2.4.x 부터 삭제되어 에러가 발생한다.
+
+### Zuul 대신 SCG (Spring Cloud Gateway)
+이후 정리 ... <br/>
+<https://velog.io/@tlatldms/서버개발캠프-MSA-아키텍쳐의-API-Gateway-프레임워크-결정>
+
+
+
 
 ---
 ### Conway's way

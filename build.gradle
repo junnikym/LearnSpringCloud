@@ -5,4 +5,6 @@ plugins {
 dependencies {
 	implementation project(':User')
 	implementation project(':Product')
+	implementation project(':Registry')
+	implementation project(':Gateway')
 }

@@ -1,5 +1,6 @@
 rootProject.name = 'learnSpringCloud'
 include 'User'
 include 'Product'
-include 'registry'
+include 'Registry'
+include 'Gateway'
 
